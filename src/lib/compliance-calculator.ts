@@ -6,7 +6,9 @@ import {
   COMPLIANCE_CHECKS,
   getMaterialById,
   getPackagingTypeById,
-  calculateVoidSpace
+  calculateVoidSpace,
+  calculatePackagingVolume,
+  assessMinimization
 } from './ppwr-rules';
 
 export interface ProductData {
@@ -27,11 +29,21 @@ export interface ProductData {
   // 产品信息
   productVolume?: number; // cm³
   productWeight?: number; // g
+  packagingWeight?: number; // g
   
   // 材质属性
   recycledContentPercent?: number;
   pfasContentPpm?: number;
   compostable?: boolean;
+  
+  // 过度包装检查
+  hasDoubleWall?: boolean;
+  hasFalseBottom?: boolean;
+  hasMisleadingDesign?: boolean;
+  
+  // 填充材料
+  usesFillerMaterial?: boolean;
+  fillerMaterialType?: string;
   
   // 其他
   targetMarket: string[]; // 目标欧盟国家
@@ -46,6 +58,7 @@ export interface CheckResult {
   message: string;
   action?: string;
   effectiveDate: string;
+  article?: string;
 }
 
 export interface ComplianceReport {
@@ -70,6 +83,13 @@ export interface ComplianceReport {
     drsRequired?: boolean;
   };
   voidSpacePercent?: number;
+  voidSpaceCompliant?: boolean;
+  minimizationAssessment?: {
+    passed: boolean;
+    issues: string[];
+    recommendations: string[];
+  };
+  overpackagingDetected?: boolean;
 }
 
 export function runComplianceCheck(data: ProductData): ComplianceReport {
@@ -80,11 +100,24 @@ export function runComplianceCheck(data: ProductData): ComplianceReport {
   const material = getMaterialById(data.material);
   const packagingType = getPackagingTypeById(data.packagingType);
   
-  // 计算空余空间
-  const packagingVolume = data.packagingLength * data.packagingWidth * data.packagingHeight;
+  // 计算包装体积和空隙率
+  const packagingVolume = calculatePackagingVolume(
+    data.packagingLength,
+    data.packagingWidth,
+    data.packagingHeight
+  );
   const voidSpacePercent = data.productVolume 
     ? calculateVoidSpace(data.productVolume, packagingVolume)
     : undefined;
+  
+  // 评估包装最小化
+  const minimizationAssessment = assessMinimization({
+    packagingWeight: data.packagingWeight,
+    productWeight: data.productWeight,
+    hasUnnecessaryLayers: data.hasMisleadingDesign,
+    hasExcessivePadding: data.usesFillerMaterial,
+    usesRightSizedBox: voidSpacePercent !== undefined && voidSpacePercent <= 50
+  });
   
   // 准备检查数据
   const checkData: any = {
@@ -94,8 +127,10 @@ export function runComplianceCheck(data: ProductData): ComplianceReport {
     minRecycledContent2030: material?.minRecycledContent2030,
     drsRequired: packagingType?.drsRequired || data.packagingType.includes('beverage'),
     voidSpacePercent,
+    packagingCategory: packagingType?.category,
     pfasFree: material?.pfasFree,
-    compostable: data.compostable || material?.compostable
+    compostable: data.compostable || material?.compostable,
+    hasMinimization: minimizationAssessment.passed
   };
   
   // 运行所有合规检查
@@ -106,7 +141,8 @@ export function runComplianceCheck(data: ProductData): ComplianceReport {
         checkId: check.id,
         checkName: check.name,
         ...result,
-        effectiveDate: check.effectiveDate
+        effectiveDate: check.effectiveDate,
+        article: check.article
       });
       
       // 收集建议
@@ -130,7 +166,8 @@ export function runComplianceCheck(data: ProductData): ComplianceReport {
         passed: false,
         severity: 'medium',
         message: `检查失败：${error instanceof Error ? error.message : '未知错误'}`,
-        effectiveDate: check.effectiveDate
+        effectiveDate: check.effectiveDate,
+        article: check.article
       });
     }
   }
@@ -157,6 +194,13 @@ export function runComplianceCheck(data: ProductData): ComplianceReport {
     });
   }
   
+  // 添加最小化评估建议
+  if (!minimizationAssessment.passed) {
+    minimizationAssessment.recommendations.forEach(rec => {
+      recommendations.push(`♻️ ${rec}`);
+    });
+  }
+  
   // 计算总体状态
   const highRiskCount = results.filter(r => !r.passed && r.severity === 'high').length;
   const mediumRiskCount = results.filter(r => !r.passed && r.severity === 'medium').length;
@@ -168,6 +212,9 @@ export function runComplianceCheck(data: ProductData): ComplianceReport {
   } else if (mediumRiskCount > 0) {
     overallStatus = 'warning';
   }
+  
+  // 检测过度包装
+  const overpackagingDetected = data.hasDoubleWall || data.hasFalseBottom || data.hasMisleadingDesign;
   
   return {
     productId: `PPWR-${Date.now()}`,
@@ -190,7 +237,10 @@ export function runComplianceCheck(data: ProductData): ComplianceReport {
       category: packagingType.category,
       drsRequired: packagingType.drsRequired
     } : undefined,
-    voidSpacePercent
+    voidSpacePercent,
+    voidSpaceCompliant: voidSpacePercent !== undefined && voidSpacePercent <= 50,
+    minimizationAssessment,
+    overpackagingDetected
   };
 }
 

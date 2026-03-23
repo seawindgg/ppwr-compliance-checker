@@ -16,15 +16,22 @@ export default function Home() {
     packagingHeight: 0,
     productVolume: undefined as number | undefined,
     productWeight: undefined as number | undefined,
+    packagingWeight: undefined as number | undefined,
     recycledContentPercent: undefined as number | undefined,
     pfasContentPpm: undefined as number | undefined,
     compostable: false,
+    hasDoubleWall: false,
+    hasFalseBottom: false,
+    hasMisleadingDesign: false,
+    usesFillerMaterial: false,
+    fillerMaterialType: '',
     targetMarket: ['DE'],
     exportDate: ''
   });
 
   const [report, setReport] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'basic' | 'dimensions' | 'material' | 'overpackaging'>('basic');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,6 +51,13 @@ export default function Home() {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const tabs = [
+    { id: 'basic', label: '📦 基本信息', icon: '📦' },
+    { id: 'dimensions', label: '📏 尺寸信息', icon: '📏' },
+    { id: 'material', label: '🧪 材质属性', icon: '🧪' },
+    { id: 'overpackaging', label: '⚠️ 过度包装检查', icon: '⚠️' }
+  ];
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       {/* Header */}
@@ -55,6 +69,17 @@ export default function Home() {
           <p className="mt-2 text-gray-600">
             帮助中国企业快速评估产品包装是否符合欧盟 PPWR 法规 (EU 2025/40)
           </p>
+          <div className="mt-4 flex flex-wrap gap-2 text-sm">
+            <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full">
+              Article 10: 包装最小化
+            </span>
+            <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full">
+              Article 24: 空隙率≤50%
+            </span>
+            <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full">
+              Article 26: 禁止过度包装
+            </span>
+          </div>
         </div>
       </header>
 
@@ -62,47 +87,60 @@ export default function Home() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* 表单区域 */}
           <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">📦 产品信息</h2>
-            
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {/* 基本信息 */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  产品名称 *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.productName}
-                  onChange={(e) => handleChange('productName', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="例如：有机绿茶 500g"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  产品类别 *
-                </label>
-                <select
-                  value={formData.productCategory}
-                  onChange={(e) => handleChange('productCategory', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            {/* Tab 导航 */}
+            <div className="flex flex-wrap gap-2 mb-6 border-b">
+              {tabs.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as any)}
+                  className={`px-4 py-2 rounded-t-lg font-medium transition-colors ${
+                    activeTab === tab.id
+                      ? 'bg-blue-50 text-blue-600 border-b-2 border-blue-600'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
                 >
-                  <option value="food">食品</option>
-                  <option value="beverage">饮料</option>
-                  <option value="cosmetics">化妆品</option>
-                  <option value="electronics">电子产品</option>
-                  <option value="textiles">纺织品</option>
-                  <option value="other">其他</option>
-                </select>
-              </div>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
 
-              {/* 包装信息 */}
-              <div className="border-t pt-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">📦 包装信息</h3>
-                
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* 基本信息 Tab */}
+              {activeTab === 'basic' && (
                 <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      产品名称 *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={formData.productName}
+                      onChange={(e) => handleChange('productName', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="例如：有机绿茶 500g"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      产品类别 *
+                    </label>
+                    <select
+                      value={formData.productCategory}
+                      onChange={(e) => handleChange('productCategory', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="food">食品</option>
+                      <option value="beverage">饮料</option>
+                      <option value="cosmetics">化妆品</option>
+                      <option value="electronics">电子产品</option>
+                      <option value="textiles">纺织品</option>
+                      <option value="toys">玩具</option>
+                      <option value="other">其他</option>
+                    </select>
+                  </div>
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       包装类型 *
@@ -118,8 +156,157 @@ export default function Home() {
                         </option>
                       ))}
                     </select>
+                    <p className="mt-1 text-xs text-gray-500">
+                      💡 提示：二级包装、运输包装、电商包装需符合 50% 空隙率限制
+                    </p>
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      目标市场
+                    </label>
+                    <select
+                      value={formData.targetMarket[0]}
+                      onChange={(e) => handleChange('targetMarket', [e.target.value])}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="DE">德国</option>
+                      <option value="FR">法国</option>
+                      <option value="IT">意大利</option>
+                      <option value="ES">西班牙</option>
+                      <option value="NL">荷兰</option>
+                      <option value="PL">波兰</option>
+                      <option value="EU">欧盟全境</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      预计出口日期
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.exportDate}
+                      onChange={(e) => handleChange('exportDate', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      ⏰ 关键日期：2026-08-12 (主要条款生效) | 2030-01-01 (50% 空隙率强制执行)
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* 尺寸信息 Tab */}
+              {activeTab === 'dimensions' && (
+                <div className="space-y-6">
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <h3 className="text-sm font-medium text-blue-900 mb-2">
+                      📐 PPWR Article 24 空隙率计算
+                    </h3>
+                    <p className="text-xs text-blue-700 mb-3">
+                      空隙率 = (包装内部体积 - 产品体积) / 包装内部体积 × 100%
+                    </p>
+                    <p className="text-xs text-blue-700">
+                      ⚠️ 2030 年起，组合包装/运输包装/电商包装的空隙率不得超过 50%
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      包装尺寸 (mm) *
+                    </label>
+                    <div className="grid grid-cols-3 gap-4">
+                      <div>
+                        <input
+                          type="number"
+                          min="0"
+                          required
+                          value={formData.packagingLength || ''}
+                          onChange={(e) => handleChange('packagingLength', e.target.value ? parseFloat(e.target.value) : 0)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="长度"
+                        />
+                        <p className="text-xs text-center text-gray-500 mt-1">长度</p>
+                      </div>
+                      <div>
+                        <input
+                          type="number"
+                          min="0"
+                          required
+                          value={formData.packagingWidth || ''}
+                          onChange={(e) => handleChange('packagingWidth', e.target.value ? parseFloat(e.target.value) : 0)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="宽度"
+                        />
+                        <p className="text-xs text-center text-gray-500 mt-1">宽度</p>
+                      </div>
+                      <div>
+                        <input
+                          type="number"
+                          min="0"
+                          required
+                          value={formData.packagingHeight || ''}
+                          onChange={(e) => handleChange('packagingHeight', e.target.value ? parseFloat(e.target.value) : 0)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="高度"
+                        />
+                        <p className="text-xs text-center text-gray-500 mt-1">高度</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      产品体积 (cm³)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.productVolume || ''}
+                      onChange={(e) => handleChange('productVolume', e.target.value ? parseFloat(e.target.value) : undefined)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="用于计算空隙率"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      💡 提示：产品体积可通过排水法测量，或根据产品尺寸计算
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        产品重量 (g)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.productWeight || ''}
+                        onChange={(e) => handleChange('productWeight', e.target.value ? parseFloat(e.target.value) : undefined)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="净重"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        包装重量 (g)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.packagingWeight || ''}
+                        onChange={(e) => handleChange('packagingWeight', e.target.value ? parseFloat(e.target.value) : undefined)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="皮重"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 材质属性 Tab */}
+              {activeTab === 'material' && (
+                <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       主要材质 *
@@ -150,6 +337,9 @@ export default function Home() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       placeholder="例如：30"
                     />
+                    <p className="mt-1 text-xs text-gray-500">
+                      📊 2030 年要求：PET 接触敏感 30% | 其他塑料 10-35%
+                    </p>
                   </div>
 
                   <div className="flex items-center">
@@ -163,114 +353,147 @@ export default function Home() {
                       可工业堆肥 (EN 13432 认证)
                     </label>
                   </div>
-                </div>
-              </div>
+                  <p className="text-xs text-gray-500 -mt-3">
+                    ⚠️ 2028 年 2 月起，茶包/咖啡包/水果标签必须可堆肥
+                  </p>
 
-              {/* 尺寸信息 */}
-              <div className="border-t pt-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">📏 尺寸信息</h3>
-                
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      长度 (mm)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formData.packagingLength || ''}
-                      onChange={(e) => handleChange('packagingLength', e.target.value ? parseFloat(e.target.value) : 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="0"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      宽度 (mm)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formData.packagingWidth || ''}
-                      onChange={(e) => handleChange('packagingWidth', e.target.value ? parseFloat(e.target.value) : 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="0"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      高度 (mm)
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formData.packagingHeight || ''}
-                      onChange={(e) => handleChange('packagingHeight', e.target.value ? parseFloat(e.target.value) : 0)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="0"
-                    />
+                  <div className="border-t pt-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">化学物质检测</h4>
+                    
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-2">
+                        PFAS 含量 (ppm)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.pfasContentPpm || ''}
+                        onChange={(e) => handleChange('pfasContentPpm', e.target.value ? parseFloat(e.target.value) : undefined)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        placeholder="阈值：50ppm"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        🚫 PPWR 规定总 PFAS 含量不得超过 50ppm
+                      </p>
+                    </div>
                   </div>
                 </div>
+              )}
 
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    产品体积 (cm³)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    value={formData.productVolume || ''}
-                    onChange={(e) => handleChange('productVolume', e.target.value ? parseFloat(e.target.value) : undefined)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="用于计算空余空间"
-                  />
-                </div>
-              </div>
+              {/* 过度包装检查 Tab */}
+              {activeTab === 'overpackaging' && (
+                <div className="space-y-4">
+                  <div className="bg-red-50 p-4 rounded-lg">
+                    <h3 className="text-sm font-medium text-red-900 mb-2">
+                      ⚠️ PPWR Article 10(2) 禁止的过度包装设计
+                    </h3>
+                    <p className="text-xs text-red-700 mb-3">
+                      以下设计元素自 2026 年 8 月 12 日起被明确禁止：
+                    </p>
+                    <ul className="text-xs text-red-700 space-y-1">
+                      <li>• 双壁包装 (Double walls)</li>
+                      <li>• 假底部设计 (False bottoms)</li>
+                      <li>• 其他人为增加产品感知体积的设计</li>
+                    </ul>
+                  </div>
 
-              {/* 出口信息 */}
-              <div className="border-t pt-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">🚢 出口信息</h3>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    目标市场
-                  </label>
-                  <select
-                    value={formData.targetMarket[0]}
-                    onChange={(e) => handleChange('targetMarket', [e.target.value])}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="DE">德国</option>
-                    <option value="FR">法国</option>
-                    <option value="IT">意大利</option>
-                    <option value="ES">西班牙</option>
-                    <option value="NL">荷兰</option>
-                    <option value="PL">波兰</option>
-                    <option value="EU">欧盟全境</option>
-                  </select>
-                </div>
+                  <div className="space-y-3">
+                    <div className="flex items-start">
+                      <input
+                        type="checkbox"
+                        checked={formData.hasDoubleWall}
+                        onChange={(e) => handleChange('hasDoubleWall', e.target.checked)}
+                        className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded mt-1"
+                      />
+                      <label className="ml-2 text-sm text-gray-700">
+                        <span className="font-medium">双壁包装</span>
+                        <p className="text-xs text-gray-500">包装有双层壁结构，人为增加体积感</p>
+                      </label>
+                    </div>
 
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    预计出口日期
-                  </label>
-                  <input
-                    type="date"
-                    value={formData.exportDate}
-                    onChange={(e) => handleChange('exportDate', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                    <div className="flex items-start">
+                      <input
+                        type="checkbox"
+                        checked={formData.hasFalseBottom}
+                        onChange={(e) => handleChange('hasFalseBottom', e.target.checked)}
+                        className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded mt-1"
+                      />
+                      <label className="ml-2 text-sm text-gray-700">
+                        <span className="font-medium">假底部设计</span>
+                        <p className="text-xs text-gray-500">包装底部有隐藏隔层，使产品看起来更多</p>
+                      </label>
+                    </div>
+
+                    <div className="flex items-start">
+                      <input
+                        type="checkbox"
+                        checked={formData.hasMisleadingDesign}
+                        onChange={(e) => handleChange('hasMisleadingDesign', e.target.checked)}
+                        className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300 rounded mt-1"
+                      />
+                      <label className="ml-2 text-sm text-gray-700">
+                        <span className="font-medium">误导性设计元素</span>
+                        <p className="text-xs text-gray-500">其他人为增加产品感知体积的设计</p>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">📦 填充材料使用</h4>
+                    
+                    <div className="flex items-start mb-3">
+                      <input
+                        type="checkbox"
+                        checked={formData.usesFillerMaterial}
+                        onChange={(e) => handleChange('usesFillerMaterial', e.target.checked)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-1"
+                      />
+                      <label className="ml-2 text-sm text-gray-700">
+                        <span className="font-medium">使用填充材料</span>
+                        <p className="text-xs text-gray-500">如气泡膜、空气袋、泡沫等</p>
+                      </label>
+                    </div>
+
+                    {formData.usesFillerMaterial && (
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-2">
+                          填充材料类型
+                        </label>
+                        <select
+                          value={formData.fillerMaterialType}
+                          onChange={(e) => handleChange('fillerMaterialType', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">请选择</option>
+                          <option value="bubble_wrap">气泡膜</option>
+                          <option value="air_cushion">空气袋/气柱</option>
+                          <option value="foam">泡沫填充物</option>
+                          <option value="paper_shred">纸屑</option>
+                          <option value="styrofoam">聚苯乙烯泡沫粒</option>
+                          <option value="other">其他</option>
+                        </select>
+                        <p className="mt-1 text-xs text-amber-600">
+                          ⚠️ 注意：填充材料所占空间需计入空隙率，不能"充数"
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* 提交按钮 */}
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
-              >
-                {loading ? '检查中...' : '🔍 开始合规检查'}
-              </button>
+              <div className="border-t pt-6">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed font-medium"
+                >
+                  {loading ? '检查中...' : '🔍 开始合规检查'}
+                </button>
+                <p className="text-xs text-center text-gray-500 mt-2">
+                  检查约需 1-2 秒，将生成详细合规报告
+                </p>
+              </div>
             </form>
           </div>
 
@@ -282,6 +505,24 @@ export default function Home() {
                   <div className="text-6xl mb-4">📋</div>
                   <p className="text-lg">填写左侧表单后点击检查</p>
                   <p className="text-sm mt-2">系统将自动评估 PPWR 合规风险</p>
+                  <div className="mt-6 text-left text-xs space-y-2">
+                    <p className="flex items-center">
+                      <span className="mr-2">✅</span>
+                      Article 10: 包装最小化原则
+                    </p>
+                    <p className="flex items-center">
+                      <span className="mr-2">📐</span>
+                      Article 24: 空隙率≤50%
+                    </p>
+                    <p className="flex items-center">
+                      <span className="mr-2">⚠️</span>
+                      Article 10(2): 禁止过度包装
+                    </p>
+                    <p className="flex items-center">
+                      <span className="mr-2">♻️</span>
+                      Article 5: 可回收等级要求
+                    </p>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -334,10 +575,71 @@ function ComplianceReport({ report }: { report: any }) {
         </div>
       </div>
 
+      {/* 空隙率结果 */}
+      {report.voidSpacePercent !== undefined && (
+        <div className={`bg-white rounded-lg shadow p-6 border-l-4 ${
+          report.voidSpaceCompliant ? 'border-green-500' : 'border-red-500'
+        }`}>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">📐 Article 24 空隙率评估</h3>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-sm text-gray-600">计算空隙率</p>
+              <p className={`text-3xl font-bold ${
+                report.voidSpaceCompliant ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {report.voidSpacePercent}%
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-gray-600">PPWR 要求</p>
+              <p className="text-3xl font-bold text-gray-900">≤50%</p>
+            </div>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-4">
+            <div
+              className={`h-4 rounded-full ${
+                report.voidSpaceCompliant ? 'bg-green-500' : 'bg-red-500'
+              }`}
+              style={{ width: `${Math.min(report.voidSpacePercent, 100)}%` }}
+            />
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            {report.voidSpaceCompliant 
+              ? '✅ 空隙率符合要求，可安全出口' 
+              : '❌ 空隙率超标，需减小包装尺寸或增大产品体积'}
+          </p>
+        </div>
+      )}
+
+      {/* 过度包装检测 */}
+      {report.overpackagingDetected && (
+        <div className="bg-red-50 border-2 border-red-300 rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-red-900 mb-4">
+            ⚠️ 检测到禁止的过度包装设计
+          </h3>
+          <p className="text-red-700 mb-4">
+            以下设计元素违反 PPWR Article 10(2)，自 2026 年 8 月 12 日起禁止在欧盟市场销售：
+          </p>
+          <ul className="space-y-2">
+            {report.results
+              .filter((r: any) => r.checkId === 'overpackaging_prohibition' && !r.passed)
+              .map((r: any, i: number) => (
+                <li key={i} className="flex items-start text-red-800">
+                  <span className="mr-2">❌</span>
+                  <span>{r.message}</span>
+                </li>
+              ))}
+          </ul>
+          <p className="text-sm text-red-700 mt-4 font-medium">
+            💡 建议：立即重新设计包装，移除禁止的设计元素
+          </p>
+        </div>
+      )}
+
       {/* 材质信息 */}
       {report.materialInfo && (
         <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">📦 材质信息</h3>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">🧪 材质信息</h3>
           <div className="space-y-2">
             <p><span className="text-gray-600">材质名称：</span>{report.materialInfo.name}</p>
             <p><span className="text-gray-600">材质类别：</span>{report.materialInfo.category}</p>
@@ -373,7 +675,14 @@ function ComplianceReport({ report }: { report: any }) {
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
-                  <h4 className="font-medium text-gray-900">{result.checkName}</h4>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="font-medium text-gray-900">{result.checkName}</h4>
+                    {result.article && (
+                      <span className="text-xs text-gray-500 bg-gray-200 px-2 py-0.5 rounded">
+                        {result.article}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-600 mt-1">{result.message}</p>
                   {result.action && (
                     <p className="text-sm text-blue-600 mt-2">💡 {result.action}</p>
@@ -407,6 +716,38 @@ function ComplianceReport({ report }: { report: any }) {
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {/* 最小化评估 */}
+      {report.minimizationAssessment && !report.minimizationAssessment.passed && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-500 rounded-lg shadow p-6">
+          <h3 className="text-lg font-semibold text-yellow-900 mb-4">
+            ⚠️ 包装最小化评估未通过
+          </h3>
+          <p className="text-yellow-700 mb-4">
+            根据 PPWR Article 10，包装重量和体积需限制在确保产品保护、Handling 和销售所需的最低限度。
+          </p>
+          {report.minimizationAssessment.issues.length > 0 && (
+            <div className="mb-4">
+              <h4 className="font-medium text-yellow-900 mb-2">发现的问题：</h4>
+              <ul className="space-y-1">
+                {report.minimizationAssessment.issues.map((issue: string, i: number) => (
+                  <li key={i} className="text-yellow-800 text-sm">❌ {issue}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {report.minimizationAssessment.recommendations.length > 0 && (
+            <div>
+              <h4 className="font-medium text-yellow-900 mb-2">改进建议：</h4>
+              <ul className="space-y-1">
+                {report.minimizationAssessment.recommendations.map((rec: string, i: number) => (
+                  <li key={i} className="text-yellow-800 text-sm">💡 {rec}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
 

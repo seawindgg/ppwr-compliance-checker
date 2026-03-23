@@ -1,5 +1,6 @@
 // PPWR 法规规则库 (Regulation EU 2025/40)
 // 最后更新：2026-03-23
+// 包含：Article 10 (包装最小化), Article 24 (空隙率限制), Article 26 (禁止过度包装)
 
 export interface MaterialRule {
   id: string;
@@ -17,7 +18,7 @@ export interface MaterialRule {
 export interface PackagingType {
   id: string;
   name: string;
-  category: 'primary' | 'secondary' | 'tertiary' | 'beverage';
+  category: 'primary' | 'secondary' | 'tertiary' | 'beverage' | 'ecommerce';
   drsRequired?: boolean; // 是否需要 DRS 押金系统
   voidSpaceLimit2030?: number; // 2030 年起空余空间限制%
   restrictions: string[];
@@ -206,29 +207,36 @@ export const MATERIAL_RULES: MaterialRule[] = [
 export const PACKAGING_TYPES: PackagingType[] = [
   {
     id: 'primary_food',
-    name: '食品直接接触包装',
+    name: '食品直接接触包装 (销售包装)',
     category: 'primary',
-    restrictions: ['需符合食品接触材料法规', '2030 年起需 A/B/C 级可回收']
+    restrictions: ['需符合食品接触材料法规', '2030 年起需 A/B/C 级可回收', '需满足最小化原则']
   },
   {
     id: 'primary_non_food',
-    name: '非食品直接接触包装',
+    name: '非食品直接接触包装 (销售包装)',
     category: 'primary',
-    restrictions: ['2030 年起需 A/B/C 级可回收']
+    restrictions: ['2030 年起需 A/B/C 级可回收', '需满足最小化原则']
   },
   {
     id: 'secondary',
-    name: '二级包装 (如彩盒)',
+    name: '二级包装 (如彩盒、组合包装)',
     category: 'secondary',
     voidSpaceLimit2030: 50,
-    restrictions: ['2030 年起空余空间≤50%']
+    restrictions: ['2030 年起空余空间≤50%', '禁止过度包装']
   },
   {
     id: 'tertiary',
-    name: '运输包装 (如纸箱)',
+    name: '运输包装 (如外箱、托盘)',
     category: 'tertiary',
     voidSpaceLimit2030: 50,
-    restrictions: ['2030 年起空余空间≤50%']
+    restrictions: ['2030 年起空余空间≤50%', '需适应产品尺寸', '禁止运输空气']
+  },
+  {
+    id: 'ecommerce',
+    name: '电商包装 (直邮消费者)',
+    category: 'ecommerce',
+    voidSpaceLimit2030: 50,
+    restrictions: ['2030 年起空余空间≤50%', '禁止使用填充材料充数', '需最小化包装']
   },
   {
     id: 'beverage_bottle',
@@ -264,6 +272,7 @@ export interface ComplianceCheck {
   name: string;
   description: string;
   effectiveDate: string; // 生效日期 ISO 格式
+  article?: string; // 对应的 PPWR 条款
   check: (data: any) => { passed: boolean; message: string; severity: 'high' | 'medium' | 'low'; action?: string };
 }
 
@@ -273,11 +282,12 @@ export const COMPLIANCE_CHECKS: ComplianceCheck[] = [
     name: '2030 可回收性要求',
     description: '2030 年 1 月 1 日起，只有可回收等级 A/B/C 的包装可进入欧盟市场',
     effectiveDate: '2030-01-01',
+    article: 'Article 5(1)',
     check: (data) => {
       const grade = data.recyclabilityGrade;
       if (!grade) return { passed: false, message: '未知可回收等级', severity: 'high' };
       if (['A', 'B', 'C'].includes(grade)) {
-        return { passed: true, message: `可回收等级${grade}符合要求`, severity: 'low' };
+        return { passed: true, message: `可回收等级${grade}符合 2030 年要求`, severity: 'low' };
       }
       return { passed: false, message: `可回收等级${grade}不符合 2030 年要求 (需 A/B/C 级)`, severity: 'high' };
     }
@@ -287,6 +297,7 @@ export const COMPLIANCE_CHECKS: ComplianceCheck[] = [
     name: '2038 可回收性要求',
     description: '2038 年 1 月 1 日起，只有可回收等级 A/B 的包装可进入欧盟市场',
     effectiveDate: '2038-01-01',
+    article: 'Article 5(2)',
     check: (data) => {
       const grade = data.recyclabilityGrade;
       if (!grade) return { passed: false, message: '未知可回收等级', severity: 'medium' };
@@ -297,17 +308,130 @@ export const COMPLIANCE_CHECKS: ComplianceCheck[] = [
     }
   },
   {
-    id: 'void_space_2030',
-    name: '空余空间限制',
-    description: '2030 年起，包装空余空间不得超过 50%',
-    effectiveDate: '2030-01-01',
+    id: 'void_space_2026',
+    name: '空隙率限制 (2026)',
+    description: '2026 年 8 月起，组合包装/运输包装/电商包装需最小化空余空间',
+    effectiveDate: '2026-08-12',
+    article: 'Article 24(1)',
     check: (data) => {
       const voidSpacePercent = data.voidSpacePercent;
-      if (voidSpacePercent === undefined) return { passed: true, message: '未提供空余空间数据', severity: 'low' };
-      if (voidSpacePercent <= 50) {
-        return { passed: true, message: `空余空间${voidSpacePercent}%符合要求 (≤50%)`, severity: 'low' };
+      const packagingCategory = data.packagingCategory;
+      
+      // 仅适用于二级、三级和电商包装
+      if (!['secondary', 'tertiary', 'ecommerce'].includes(packagingCategory)) {
+        return { passed: true, message: '销售包装不直接适用 50% 空隙率限制', severity: 'low' };
       }
-      return { passed: false, message: `空余空间${voidSpacePercent}%超标 (需≤50%)`, severity: 'high' };
+      
+      if (voidSpacePercent === undefined) {
+        return { passed: false, message: '未提供空隙率数据，无法评估合规性', severity: 'medium' };
+      }
+      
+      if (voidSpacePercent <= 50) {
+        return { passed: true, message: `空隙率${voidSpacePercent}%符合要求 (≤50%)`, severity: 'low' };
+      }
+      return { passed: false, message: `空隙率${voidSpacePercent}%超标 (需≤50%)`, severity: 'high' };
+    }
+  },
+  {
+    id: 'void_space_2030',
+    name: '空隙率强制限制 (2030)',
+    description: '2030 年 1 月 1 日起，空隙率不得超过 50%（强制执行）',
+    effectiveDate: '2030-01-01',
+    article: 'Article 24(2)',
+    check: (data) => {
+      const voidSpacePercent = data.voidSpacePercent;
+      const packagingCategory = data.packagingCategory;
+      
+      if (!['secondary', 'tertiary', 'ecommerce'].includes(packagingCategory)) {
+        return { passed: true, message: '销售包装不直接适用 50% 空隙率限制', severity: 'low' };
+      }
+      
+      if (voidSpacePercent === undefined) {
+        return { passed: true, message: '未提供空隙率数据', severity: 'low' };
+      }
+      
+      if (voidSpacePercent <= 50) {
+        return { passed: true, message: `空隙率${voidSpacePercent}%符合 2030 年强制要求`, severity: 'low' };
+      }
+      return { passed: false, message: `空隙率${voidSpacePercent}%不符合 2030 年强制要求 (需≤50%)`, severity: 'high' };
+    }
+  },
+  {
+    id: 'packaging_minimization',
+    name: '包装最小化原则',
+    description: '包装重量和体积需限制在确保产品保护、 Handling 和销售所需的最低限度',
+    effectiveDate: '2026-08-12',
+    article: 'Article 10',
+    check: (data) => {
+      const hasMinimization = data.hasMinimization;
+      
+      if (hasMinimization === false) {
+        return { 
+          passed: false, 
+          message: '包装设计未满足最小化原则', 
+          severity: 'high',
+          action: '需重新设计包装，减少不必要的材料和空间'
+        };
+      }
+      if (hasMinimization === true) {
+        return { passed: true, message: '包装设计满足最小化原则', severity: 'low' };
+      }
+      return { passed: true, message: '需自我评估是否满足最小化原则', severity: 'medium' };
+    }
+  },
+  {
+    id: 'overpackaging_prohibition',
+    name: '禁止过度包装',
+    description: '禁止双壁包装、假底部或其他人为增加产品感知体积的设计元素',
+    effectiveDate: '2026-08-12',
+    article: 'Article 10(2)',
+    check: (data) => {
+      const hasDoubleWall = data.hasDoubleWall;
+      const hasFalseBottom = data.hasFalseBottom;
+      const hasMisleadingDesign = data.hasMisleadingDesign;
+      
+      const issues: string[] = [];
+      
+      if (hasDoubleWall) {
+        issues.push('双壁包装');
+      }
+      if (hasFalseBottom) {
+        issues.push('假底部设计');
+      }
+      if (hasMisleadingDesign) {
+        issues.push('误导性设计元素');
+      }
+      
+      if (issues.length > 0) {
+        return { 
+          passed: false, 
+          message: `发现禁止的过度包装设计：${issues.join('、')}`, 
+          severity: 'high',
+          action: '必须移除禁止的设计元素，否则禁止在欧盟市场销售'
+        };
+      }
+      return { passed: true, message: '未发现禁止的过度包装设计', severity: 'low' };
+    }
+  },
+  {
+    id: 'filler_material_void',
+    name: '填充材料计入空隙',
+    description: '气泡膜、空气袋、泡沫填充物等填充材料所占空间计入空隙率',
+    effectiveDate: '2026-08-12',
+    article: 'Article 24(3)',
+    check: (data) => {
+      const usesFillerMaterial = data.usesFillerMaterial;
+      const fillerMaterialType = data.fillerMaterialType;
+      
+      if (usesFillerMaterial) {
+        return { 
+          passed: true, 
+          message: `使用填充材料 (${fillerMaterialType || '未指定'})，其占用空间需计入空隙率`, 
+          severity: 'medium',
+          action: '注意：填充材料所占空间不能从空隙率计算中扣除，建议减小包装尺寸而非依赖填充物'
+        };
+      }
+      return { passed: true, message: '未使用填充材料', severity: 'low' };
     }
   },
   {
@@ -315,6 +439,7 @@ export const COMPLIANCE_CHECKS: ComplianceCheck[] = [
     name: '塑料再生含量要求',
     description: '2030 年起塑料包装需含最低比例再生料',
     effectiveDate: '2030-01-01',
+    article: 'Article 7',
     check: (data) => {
       const materialCategory = data.materialCategory;
       const recycledContent = data.recycledContentPercent;
@@ -340,6 +465,7 @@ export const COMPLIANCE_CHECKS: ComplianceCheck[] = [
     name: '可堆肥要求 (2028)',
     description: '2028 年 2 月起，茶包、咖啡包、水果标签必须可工业堆肥',
     effectiveDate: '2028-02-12',
+    article: 'Article 6',
     check: (data) => {
       const packagingType = data.packagingType;
       const compostable = data.compostable;
@@ -358,6 +484,7 @@ export const COMPLIANCE_CHECKS: ComplianceCheck[] = [
     name: 'PFAS 限制',
     description: '总 PFAS 含量不得超过 50ppm',
     effectiveDate: '2025-02-11',
+    article: 'Article 11',
     check: (data) => {
       const pfasFree = data.pfasFree;
       const pfasContent = data.pfasContentPpm;
@@ -379,6 +506,7 @@ export const COMPLIANCE_CHECKS: ComplianceCheck[] = [
     name: 'DRS 押金回收系统',
     description: '饮料包装需符合 DRS 要求',
     effectiveDate: '2029-01-01',
+    article: 'Article 9',
     check: (data) => {
       const drsRequired = data.drsRequired;
       
@@ -404,12 +532,77 @@ export function getPackagingTypeById(id: string): PackagingType | undefined {
   return PACKAGING_TYPES.find(p => p.id === id);
 }
 
+/**
+ * 计算空隙率
+ * 公式：空隙率 = (包装内部体积 - 产品体积) / 包装内部体积 × 100%
+ * 
+ * @param productVolume 产品体积 (cm³)
+ * @param packagingVolume 包装内部体积 (cm³)
+ * @returns 空隙率百分比
+ */
 export function calculateVoidSpace(productVolume: number, packagingVolume: number): number {
   if (productVolume <= 0 || packagingVolume <= 0) return 0;
-  if (packagingVolume <= productVolume) return 0;
+  if (productVolume >= packagingVolume) return 0;
   return Math.round(((packagingVolume - productVolume) / packagingVolume) * 100);
 }
 
+/**
+ * 计算包装体积
+ * @param length 长度 (mm)
+ * @param width 宽度 (mm)
+ * @param height 高度 (mm)
+ * @returns 体积 (cm³)
+ */
 export function calculatePackagingVolume(length: number, width: number, height: number): number {
-  return length * width * height;
+  return (length * width * height) / 1000; // mm³ 转 cm³
+}
+
+/**
+ * 评估包装最小化
+ */
+export interface MinimizationAssessment {
+  passed: boolean;
+  issues: string[];
+  recommendations: string[];
+}
+
+export function assessMinimization(data: {
+  packagingWeight?: number;
+  productWeight?: number;
+  hasUnnecessaryLayers?: boolean;
+  hasExcessivePadding?: boolean;
+  usesRightSizedBox?: boolean;
+}): MinimizationAssessment {
+  const issues: string[] = [];
+  const recommendations: string[] = [];
+  
+  if (data.hasUnnecessaryLayers) {
+    issues.push('存在不必要的包装层');
+    recommendations.push('减少包装层数，仅保留必要的保护层');
+  }
+  
+  if (data.hasExcessivePadding) {
+    issues.push('填充材料过多');
+    recommendations.push('优化填充材料使用，仅在产品保护必要时使用');
+  }
+  
+  if (!data.usesRightSizedBox) {
+    issues.push('包装尺寸过大');
+    recommendations.push('使用合适尺寸的包装，或采用可调节高度的纸箱');
+  }
+  
+  // 包装重量比评估（经验法则）
+  if (data.packagingWeight && data.productWeight) {
+    const ratio = data.packagingWeight / data.productWeight;
+    if (ratio > 0.5) {
+      issues.push(`包装重量比过高 (${Math.round(ratio * 100)}%)`);
+      recommendations.push('优化包装设计，减轻包装重量');
+    }
+  }
+  
+  return {
+    passed: issues.length === 0,
+    issues,
+    recommendations
+  };
 }
