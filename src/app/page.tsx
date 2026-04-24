@@ -1,8 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MATERIAL_RULES, PACKAGING_TYPES } from '../lib/ppwr-rules';
 import { runComplianceCheck, ProductData, getStatusColor, getStatusText } from '../lib/compliance-calculator';
+import { getSupabaseClient, CheckRecord } from '../lib/supabase-client';
+import AuthModal from '../components/AuthModal';
 
 export default function Home() {
   const [formData, setFormData] = useState({
@@ -32,14 +34,86 @@ export default function Home() {
   const [report, setReport] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'basic' | 'dimensions' | 'material' | 'overpackaging'>('basic');
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [checkHistory, setCheckHistory] = useState<CheckRecord[]>([]);
+
+  // 检查登录状态
+  useEffect(() => {
+    const checkUser = async () => {
+      const supabase = getSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setUser(session.user);
+        loadCheckHistory(session.user.id);
+      }
+    };
+    checkUser();
+  }, []);
+
+  const loadCheckHistory = async (userId: string) => {
+    const supabase = getSupabaseClient();
+    const { data } = await supabase
+      .from('check_records')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    if (data) setCheckHistory(data);
+  };
+
+  const handleAuthSuccess = async () => {
+    setShowAuthModal(false);
+    const supabase = getSupabaseClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      setUser(session.user);
+      // 自动提交检查
+      submitCheck();
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // 检查登录状态
+    const supabase = getSupabaseClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+      // 未登录，显示注册/登录弹窗
+      setShowAuthModal(true);
+      return;
+    }
+    
+    // 已登录，直接检查
+    submitCheck();
+  };
+
+  const submitCheck = async () => {
     setLoading(true);
     
     try {
       const result = runComplianceCheck(formData as ProductData);
       setReport(result);
+      
+      // 保存检查记录到数据库
+      if (user) {
+        const supabase = getSupabaseClient();
+        await supabase.from('check_records').insert({
+          user_id: user.id,
+          product_name: formData.productName,
+          product_category: formData.productCategory,
+          packaging_type: formData.packagingType,
+          material: formData.material,
+          void_space_percent: result.voidSpacePercent || null,
+          overall_status: result.overallStatus,
+          high_risk_count: result.highRiskCount,
+          medium_risk_count: result.mediumRiskCount,
+          low_risk_count: result.lowRiskCount,
+        } as any);
+        loadCheckHistory(user.id);
+      }
     } catch (error) {
       console.error('检查失败:', error);
     } finally {
@@ -63,12 +137,44 @@ export default function Home() {
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-          <h1 className="text-3xl font-bold text-gray-900">
-            🇪🇺 PPWR 包装合规检查工具
-          </h1>
-          <p className="mt-2 text-gray-600">
-            帮助中国企业快速评估产品包装是否符合欧盟 PPWR 法规 (EU 2025/40)
-          </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                🇪🇺 PPWR 包装合规检查工具
+              </h1>
+              <p className="mt-2 text-gray-600">
+                帮助中国企业快速评估产品包装是否符合欧盟 PPWR 法规 (EU 2025/40)
+              </p>
+            </div>
+            <div>
+              {user ? (
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <p className="text-sm font-medium text-gray-900">{user.email}</p>
+                    <p className="text-xs text-gray-500">已登录</p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      const supabase = getSupabaseClient();
+                      await supabase.auth.signOut();
+                      setUser(null);
+                      setCheckHistory([]);
+                    }}
+                    className="text-sm text-red-600 hover:text-red-700"
+                  >
+                    退出
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowAuthModal(true)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm"
+                >
+                  🔑 登录 / 注册
+                </button>
+              )}
+            </div>
+          </div>
           <div className="mt-4 flex flex-wrap gap-2 text-sm">
             <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full">
               Article 10: 包装最小化
@@ -500,30 +606,60 @@ export default function Home() {
           {/* 结果区域 */}
           <div>
             {!report ? (
-              <div className="bg-white rounded-lg shadow p-6 h-full flex items-center justify-center">
-                <div className="text-center text-gray-500">
-                  <div className="text-6xl mb-4">📋</div>
-                  <p className="text-lg">填写左侧表单后点击检查</p>
-                  <p className="text-sm mt-2">系统将自动评估 PPWR 合规风险</p>
-                  <div className="mt-6 text-left text-xs space-y-2">
-                    <p className="flex items-center">
-                      <span className="mr-2">✅</span>
-                      Article 10: 包装最小化原则
-                    </p>
-                    <p className="flex items-center">
-                      <span className="mr-2">📐</span>
-                      Article 24: 空隙率≤50%
-                    </p>
-                    <p className="flex items-center">
-                      <span className="mr-2">⚠️</span>
-                      Article 10(2): 禁止过度包装
-                    </p>
-                    <p className="flex items-center">
-                      <span className="mr-2">♻️</span>
-                      Article 5: 可回收等级要求
-                    </p>
+              <div className="bg-white rounded-lg shadow p-6">
+                {checkHistory.length > 0 ? (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">📊 最近检查记录</h3>
+                    <div className="space-y-3">
+                      {checkHistory.map((record) => (
+                        <div key={record.id} className="border rounded-lg p-4 hover:bg-gray-50">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="font-medium text-gray-900">{record.product_name}</h4>
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              record.overall_status === 'compliant' ? 'bg-green-100 text-green-700' :
+                              record.overall_status === 'warning' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-red-100 text-red-700'
+                            }`}>
+                              {record.overall_status === 'compliant' ? '✅ 合规' :
+                               record.overall_status === 'warning' ? '⚠️ 警告' : '❌ 不合规'}
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-500 space-y-1">
+                            <p>类别：{record.product_category} | 材质：{record.material}</p>
+                            {record.void_space_percent !== null && (
+                              <p>空隙率：{record.void_space_percent}%</p>
+                            )}
+                            <p>检查时间：{new Date(record.created_at).toLocaleString('zh-CN')}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="text-center text-gray-500 py-8">
+                    <div className="text-6xl mb-4">📋</div>
+                    <p className="text-lg">填写左侧表单后点击检查</p>
+                    <p className="text-sm mt-2">系统将自动评估 PPWR 合规风险</p>
+                    <div className="mt-6 text-left text-xs space-y-2">
+                      <p className="flex items-center">
+                        <span className="mr-2">✅</span>
+                        Article 10: 包装最小化原则
+                      </p>
+                      <p className="flex items-center">
+                        <span className="mr-2">📐</span>
+                        Article 24: 空隙率≤50%
+                      </p>
+                      <p className="flex items-center">
+                        <span className="mr-2">⚠️</span>
+                        Article 10(2): 禁止过度包装
+                      </p>
+                      <p className="flex items-center">
+                        <span className="mr-2">♻️</span>
+                        Article 5: 可回收等级要求
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <ComplianceReport report={report} />
@@ -531,6 +667,13 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* 注册/登录弹窗 */}
+      <AuthModal
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={handleAuthSuccess}
+      />
     </main>
   );
 }
