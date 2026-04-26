@@ -45,6 +45,24 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
 
         // 如果注册成功，创建用户档案
         if (authData.user) {
+          // 请先在 Supabase SQL Editor 中执行以下 SQL 修复触发器：
+          // DROP TRIGGER IF EXISTS set_profile_user_id ON user_profiles;
+          // DROP FUNCTION IF EXISTS set_profile_user_id();
+          // CREATE OR REPLACE FUNCTION set_profile_user_id()
+          // RETURNS TRIGGER LANGUAGE plpgsql SECURITY INVOKER AS $$
+          // BEGIN
+          //   IF NEW.id IS NULL THEN
+          //     NEW.id := auth.uid();
+          //   END IF;
+          //   RETURN NEW;
+          // END;
+          // $$
+          // CREATE TRIGGER set_profile_user_id
+          //   BEFORE INSERT ON user_profiles
+          //   FOR EACH ROW
+          //   EXECUTE FUNCTION set_profile_user_id();
+          
+          // 然后插入用户档案
           const { error: profileError } = await supabase
             .from('user_profiles')
             .insert({
@@ -57,6 +75,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess }: AuthModalProps
 
           if (profileError) {
             console.error('创建用户档案失败:', profileError);
+            console.error('请执行上面的 SQL 修复触发器后再试');
           }
         }
 
